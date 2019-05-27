@@ -1,6 +1,9 @@
 package com.wearlink.ble_uart;
 
 import android.Manifest;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothManager;
+import android.bluetooth.le.BluetoothLeAdvertiser;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -79,8 +82,6 @@ public class MainActivity extends AppCompatActivity {
     private Timer mClearAbvInfoTimer = null;
 
     private BleCommMethod bleCommMethod;
-
-//    Timer mClearAbvInfoTimer = new Timer();
 
     private void startAdvinfoTimer() {
         mClearAbvInfoTimer = new Timer();
@@ -180,7 +181,25 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-
+    private void ensureBleFeaturesAvailable() {
+        BluetoothManager mBluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+        BluetoothAdapter mBluetoothAdapter = mBluetoothManager.getAdapter();
+        if (mBluetoothAdapter == null) {
+            Toast.makeText(this, "Bluetooth not supported", Toast.LENGTH_LONG).show();
+            Log.e(TAG, "Bluetooth not supported");
+            finish();
+        }else{
+            Log.i(TAG, "Bluetooth supported");
+        }
+        BluetoothLeAdvertiser mBluetoothLeAdvertiser = mBluetoothAdapter.getBluetoothLeAdvertiser();
+        if(mBluetoothLeAdvertiser == null){
+            Toast.makeText(this, "the device not support peripheral", Toast.LENGTH_SHORT).show();
+            Log.e(TAG, "the device not support peripheral");
+            finish();
+        } else{
+            Log.i(TAG, "the device support peripheral");
+        }
+    }
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -191,6 +210,8 @@ public class MainActivity extends AppCompatActivity {
                 ActivityCompat.requestPermissions(this,new String[]{Manifest.permission.ACCESS_COARSE_LOCATION},REQUEST_CODE_ACCESS_COARSE_LOCATION);
             }
         }
+
+        ensureBleFeaturesAvailable();
 
         connection = new ServiceConnection() {
             @Override
@@ -439,8 +460,8 @@ public class MainActivity extends AppCompatActivity {
             switch (oper){
                 case BleCommStatus.OPER_ADV:
                     if(errorCode == BleCommStatus.BLE_ERROR_INVALID_PARAMETER){ // 1
-                        Log.w(TAG,"onStartFailure bleStartAdvertisementSimulate fail");
-                        strErrorMsg = "onStartFailure bleStartAdvertisementSimulate fail";
+                        Log.w(TAG,"onStartFailure bleStartAdvertisementSimulate parameter fail");
+                        strErrorMsg = "onStartFailure bleStartAdvertisementSimulate parameter fail";
                     }else if(errorCode == BleCommStatus.BLE_ERROR_INVALID_OPERATION){
                         Log.w(TAG,"onStartFailure bleStartAdvertisementSimulate operation error");
                         strErrorMsg = "onStartFailure bleStartAdvertisementSimulate operation error";
