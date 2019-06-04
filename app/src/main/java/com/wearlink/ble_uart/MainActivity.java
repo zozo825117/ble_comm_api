@@ -8,6 +8,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
@@ -42,12 +43,13 @@ public class MainActivity extends AppCompatActivity {
     boolean first;
 
     Button con_btn,discon_btn;
-    Button con_test_btn;
-    Button adv_btn;
+//    Button con_test_btn;
+//    Button adv_btn;
     Button set_btn;
     TextView con_addr;
     TextView con_name;
 
+//    byte[] conn_pass= new byte[]{1,2,3,4,5,6};
     byte[] conn_pass= new byte[]{1,2,3,4,5,6};
 
     private static String deviceAddr;
@@ -57,6 +59,7 @@ public class MainActivity extends AppCompatActivity {
     private static byte deviceAdvFlag;
     private static int intdeviceErrCode;
     boolean is_adverting = false;
+    boolean is_connect = false;
 
 
     EditText tx_edit;
@@ -78,6 +81,8 @@ public class MainActivity extends AppCompatActivity {
     private static final int UI_MODEL_CON_DEVICE_TIMEOUT = 7;
     private static final int UI_MODEL_NAME_SET = 8;
     private static final int UI_MODEL_START_FAILURE = 9;
+    private static final int UI_MODEL_SEND_OK = 10;
+
 
     private Timer mClearAbvInfoTimer = null;
 
@@ -94,7 +99,7 @@ public class MainActivity extends AppCompatActivity {
                 ui_model = UI_MODEL_SCAN_DEVICE_TIMEOUT;
                 handler.post(mUpdateUI);
             }
-        }, 3000/* 表示1000毫秒之後，執行一次 */);
+        }, 8000/* 表示1000毫秒之後，執行一次 */);
     }
 
     private void cancelAdvinfoTimer() {
@@ -112,6 +117,9 @@ public class MainActivity extends AppCompatActivity {
             if(ui_model == UI_MODEL_DISCON) {
 //               con_btn.setEnabled(false);
 //               discon_btn.setEnabled(false);
+                con_addr.setText("");
+                con_name.setText("");
+                rx_txt.setText("");
                if(intdeviceErrCode == BleCommStatus.BLE_ERROR_OK){
                    Toast.makeText(
                            MainActivity.this,
@@ -123,6 +131,7 @@ public class MainActivity extends AppCompatActivity {
                            deviceConAddr + "连接超时断开",
                            Toast.LENGTH_SHORT).show();
                }
+               deviceConAddr = null;
             }else if(ui_model == UI_MODEL_SCAN_DEVICE){
 //                con_btn.setEnabled(true);
 //                discon_btn.setEnabled(false);
@@ -138,32 +147,34 @@ public class MainActivity extends AppCompatActivity {
                 con_addr.setText(strText);
                 strText = "连接NAME :"+deviceName;
                 con_name.setText(strText);
+                Toast.makeText(MainActivity.this,deviceConAddr + "连接成功",Toast.LENGTH_SHORT).show();
 //                con_btn.setEnabled(false);
 //                discon_btn.setEnabled(true);
             }else if(ui_model == UI_MODEL_RECIVE_DAT){
                 Toast.makeText(MainActivity.this, rx_string, Toast.LENGTH_SHORT).show();
                 rx_txt.append(rx_string);
                 int offset = rx_txt.getLineCount() * rx_txt.getLineHeight();
-                Log.e(TAG, "offset:" + offset + "  rx_txt height:" + rx_txt.getHeight());
+                Log.d(TAG, "offset:" + offset + "  rx_txt height:" + rx_txt.getHeight());
                 if (offset > (rx_txt.getHeight() + 60)) {
                     rx_txt.scrollTo(0, offset - rx_txt.getHeight());
                 }
             }else if(ui_model == UI_MODEL_ADV_START){
 //                adv_btn.setEnabled(false);
-                adv_btn.setText("停止广播");
+//                adv_btn.setText("停止广播");
             }else if(ui_model == UI_MODEL_ADV_STOP){
 //                adv_btn.setEnabled(true);
-                adv_btn.setText("广播");
+//                adv_btn.setText("广播");
             }else if(ui_model == UI_MODEL_SCAN_DEVICE_TIMEOUT){
 //                con_btn.setEnabled(false);
 //                discon_btn.setEnabled(false);
                 con_addr.setText("");
                 con_name.setText("");
-                Toast.makeText(MainActivity.this,"UI_MODEL_SCAN_DEVICE_TIMEOUT",Toast.LENGTH_SHORT).show();
-                Log.d(TAG, "UI_MODEL_SCAN_DEVICE_TIMEOUT");
+                Toast.makeText(MainActivity.this,"扫描超时",Toast.LENGTH_SHORT).show();
+                Log.i(TAG, "UI_MODEL_SCAN_DEVICE_TIMEOUT");
             }else if(ui_model == UI_MODEL_CON_DEVICE_TIMEOUT) {
 //                con_btn.setEnabled(false);
 //                discon_btn.setEnabled(false);
+                Log.d(TAG, "UI_MODEL_CON_DEVICE_TIMEOUT");
                 con_addr.setText("");
                 con_name.setText("");
 //                Looper.prepare();//给当前线程初始化Looper
@@ -171,11 +182,13 @@ public class MainActivity extends AppCompatActivity {
 //                Looper.loop();
             }else if(ui_model == UI_MODEL_NAME_SET) {
 //                name_btn.setEnabled(false);
-                adv_btn.setEnabled(true);
-                adv_btn.setText("广播");
+//                adv_btn.setEnabled(true);
+//                adv_btn.setText("广播");
                 Toast.makeText(MainActivity.this,"设置设备名:" + deviceSetName,Toast.LENGTH_SHORT).show();
             }else if(ui_model == UI_MODEL_START_FAILURE){
                 Toast.makeText(MainActivity.this,strErrorMsg,Toast.LENGTH_SHORT).show();
+            }else if(ui_model == UI_MODEL_SEND_OK){
+                Toast.makeText(MainActivity.this,"发送成功",Toast.LENGTH_SHORT).show();
             }
 
         }
@@ -195,7 +208,7 @@ public class MainActivity extends AppCompatActivity {
         if(mBluetoothLeAdvertiser == null){
             Toast.makeText(this, "the device not support peripheral", Toast.LENGTH_SHORT).show();
             Log.e(TAG, "the device not support peripheral");
-            finish();
+//          finish();
         } else{
             Log.i(TAG, "the device support peripheral");
         }
@@ -203,6 +216,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT); // 禁用横屏
         setContentView(R.layout.activity_main);
         if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M){
             if(ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED){
@@ -237,22 +251,24 @@ public class MainActivity extends AppCompatActivity {
         con_addr = findViewById(R.id.conn_addr);
         con_name = findViewById(R.id.con_name);
         con_btn = findViewById(R.id.con_btn);
-        con_test_btn = findViewById(R.id.con_test_btn);
+//        con_test_btn = findViewById(R.id.con_test_btn);
         discon_btn = findViewById(R.id.discon_btn);
-        adv_btn = findViewById(R.id.adv_btn);
+//        adv_btn = findViewById(R.id.adv_btn);
         name_edit = findViewById(R.id.name_txt);
         set_btn = findViewById(R.id.set_btn);
         con_btn.setEnabled(true);
-        con_test_btn.setEnabled(true);
+//        con_test_btn.setEnabled(true);
         discon_btn.setEnabled(true);
-        adv_btn.setEnabled(true);
+//        adv_btn.setEnabled(true);
         set_btn.setEnabled(true);
 
     }
 
     public void onStartConn(View view){
         if(deviceAdvFlag == (BleCommStatus.ADV_LE_FLAG | BleCommStatus.ADV_BR_EDR_FLAG)) {
-            bleCommMethod.bleStartConnect(deviceAddr,conn_pass,5000); /* 5000毫秒之後,连接超时*/
+            bleCommMethod.bleStartConnect(deviceAddr,conn_pass,10000); /* 5000毫秒之後,连接超时*/
+            cancelAdvinfoTimer();
+            is_connect = true;
         } else {
             if ((deviceAdvFlag & BleCommStatus.ADV_BR_EDR_FLAG) == 0) {
                 Toast.makeText(this,"this device support BR/EDR can not connect",Toast.LENGTH_SHORT).show();
@@ -262,9 +278,12 @@ public class MainActivity extends AppCompatActivity {
 
     public void onStartConnTest(View view){
         bleCommMethod.bleStartConnect(deviceAddr,conn_pass,5000); /* 5000毫秒之後,连接超时*/
+        cancelAdvinfoTimer();
+        is_connect = true;
     }
 
     public void onNameSet(View view){
+        bleCommMethod.bleClose();
         String s = name_edit.getText().toString();
         Log.d(TAG, "name = " + s);
         if(s.length() == 0){
@@ -272,7 +291,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         deviceSetName = s;
-        bleCommMethod.bleStopAdvertisement();
+//        bleCommMethod.bleStopAdvertisement();
         bleCommMethod.bleRestart(deviceSetName);
         ui_model = UI_MODEL_NAME_SET;
         handler.post(mUpdateUI);
@@ -349,23 +368,29 @@ public class MainActivity extends AppCompatActivity {
     OnBleCommProgressListener onServiceProgressListener = new OnBleCommProgressListener() {
         @Override
         public void onScanDevice(String device_addr, String device_name, byte adv_flag) {
-            Log.i(TAG, "onScanDevice " + device_addr + ' ' + device_name);
-            cancelAdvinfoTimer();
-            deviceAddr = device_addr;
-            deviceName = device_name;
-            deviceAdvFlag = adv_flag;
-            ui_model = UI_MODEL_SCAN_DEVICE;
-            handler.post(mUpdateUI);
-            startAdvinfoTimer();
+            Log.d(TAG, "onScanDevice " + device_addr + ' ' + device_name);
+            if(!is_connect){
+                cancelAdvinfoTimer();
+                deviceAddr = device_addr;
+                deviceName = device_name;
+                deviceAdvFlag = adv_flag;
+                ui_model = UI_MODEL_SCAN_DEVICE;
+                handler.post(mUpdateUI);
+                startAdvinfoTimer();
+            }
+
         }
 
         @Override
         public void onConnection(String device_addr,int errorCode) {
             if(errorCode == BleCommStatus.BLE_ERROR_OK){
-            ui_model = UI_MODEL_CONNED_DEVICE;
-            deviceAddr = device_addr;
-            handler.post(mUpdateUI);
+                Log.i(TAG, "onConnection ok");
+                ui_model = UI_MODEL_CONNED_DEVICE;
+                deviceAddr = device_addr;
+                deviceConAddr = device_addr;
+                handler.post(mUpdateUI);
             } else {
+                is_connect = false;
                 Log.w(TAG, "onConnection error:" + errorCode);
                 switch (errorCode){
                     case BleCommStatus.BLE_ERROR_CONNECTION_TIMEOUT:
@@ -386,6 +411,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onDisConnection(String device_address, int errorCode) {
             intdeviceErrCode = errorCode;
+            is_connect = false;
             ui_model = UI_MODEL_DISCON;
             handler.post(mUpdateUI);
 
@@ -396,9 +422,11 @@ public class MainActivity extends AppCompatActivity {
             if(len>0) {
                 byte[] b = new byte[len];
                 rx_string = rx_index + " |  len:" + len + "   dat:";
+
                 System.arraycopy(dat, 0, b, 0, len);
                 rx_string += bytesToHexString(b);
                 rx_string += "\n";
+                Log.i(TAG, "onReceive rx string = " + rx_string);
                 rx_index++;
                 ui_model = UI_MODEL_RECIVE_DAT;
                 handler.post(mUpdateUI);
@@ -408,7 +436,9 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void onSendSta(int code) {
-
+            Log.i(TAG, "onSendSta index= " + code);
+            ui_model = UI_MODEL_SEND_OK;
+            handler.post(mUpdateUI);
         }
 
         @Override
@@ -418,7 +448,7 @@ public class MainActivity extends AppCompatActivity {
             if(name.length() == 0){
                 name = "bt uart";
             }
-            Log.i(TAG, "name = " + name);
+            Log.i(TAG, "onServiceOpen name = " + name);
             bleCommMethod.bleOpen(name);
         }
 

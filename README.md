@@ -5,7 +5,9 @@ ble_comm_api
 `blecomm-api.jar`
 可实现与模拟蓝牙设备实现基本的收发通讯的基本方法,本样例就是一种基于api的实现方法.
 
-![](http://34.92.38.105/laizhi_doc/ble_comm_jar/20190528001442.png)
+![](http://www.zozo825117.cn:10080/fake_ble/ble_comm_api/app_1.png)
+
+# 更新
 
 # 要求
 * android 最低支持的版本:   
@@ -48,7 +50,7 @@ ble_comm_api
 - [ ] onSendSta
 
 # Project Organization
-![](http://34.92.38.105/laizhi_doc/ble_comm_jar/2019-05-27_235301.png)
+![](http://www.zozo825117.cn:10080/fake_ble/ble_comm_api/app_structure.png)
 
 # Useage
 1. 在bulid.gradle中加入`blecomm-api.jar`的依赖
@@ -245,3 +247,5 @@ public interface OnBleCommProgressListener {
      */
     static final byte BLE_ERROR_CONNECTION_DISCONNECTED = 0x04;
 ```
+
+

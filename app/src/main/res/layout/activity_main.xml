@@ -16,7 +16,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Name设置" />
+            android:text="Name" />
 
         <EditText
             android:id="@+id/name_txt"
@@ -35,13 +35,6 @@
             android:text="设置" />
     </LinearLayout>
 
-    <Button
-        android:id="@+id/adv_btn"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:onClick="onAdvSimulate"
-        android:text="广播" />
-
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="38dp"
@@ -55,13 +48,6 @@
             android:onClick="onStartConn"
             android:text="连接" />
 
-        <Button
-            android:id="@+id/con_test_btn"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:onClick="onStartConnTest"
-            android:text="连接测试" />
     </LinearLayout>
 
     <TextView
