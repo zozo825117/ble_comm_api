@@ -29,6 +29,10 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 
+import com.apkfuns.log2file.LogFileEngineFactory;
+import com.apkfuns.logutils.LogLevel;
+import com.apkfuns.logutils.LogUtils;
+import com.apkfuns.logutils.file.LogFileFilter;
 import com.wearlink.blecomm.BleCommMethod;
 import com.wearlink.blecomm.BleService;
 import com.wearlink.blecomm.OnBleCommProgressListener;
@@ -154,7 +158,7 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(MainActivity.this, rx_string, Toast.LENGTH_SHORT).show();
                 rx_txt.append(rx_string);
                 int offset = rx_txt.getLineCount() * rx_txt.getLineHeight();
-                Log.d(TAG, "offset:" + offset + "  rx_txt height:" + rx_txt.getHeight());
+                LogUtils.d( "offset:" + offset + "  rx_txt height:" + rx_txt.getHeight());
                 if (offset > (rx_txt.getHeight() + 60)) {
                     rx_txt.scrollTo(0, offset - rx_txt.getHeight());
                 }
@@ -170,11 +174,11 @@ public class MainActivity extends AppCompatActivity {
                 con_addr.setText("");
                 con_name.setText("");
                 Toast.makeText(MainActivity.this,"扫描超时",Toast.LENGTH_SHORT).show();
-                Log.i(TAG, "UI_MODEL_SCAN_DEVICE_TIMEOUT");
+                LogUtils.i( "UI_MODEL_SCAN_DEVICE_TIMEOUT");
             }else if(ui_model == UI_MODEL_CON_DEVICE_TIMEOUT) {
 //                con_btn.setEnabled(false);
 //                discon_btn.setEnabled(false);
-                Log.d(TAG, "UI_MODEL_CON_DEVICE_TIMEOUT");
+                LogUtils.d( "UI_MODEL_CON_DEVICE_TIMEOUT");
                 con_addr.setText("");
                 con_name.setText("");
 //                Looper.prepare();//给当前线程初始化Looper
@@ -199,18 +203,18 @@ public class MainActivity extends AppCompatActivity {
         BluetoothAdapter mBluetoothAdapter = mBluetoothManager.getAdapter();
         if (mBluetoothAdapter == null) {
             Toast.makeText(this, "Bluetooth not supported", Toast.LENGTH_LONG).show();
-            Log.e(TAG, "Bluetooth not supported");
+            LogUtils.e( "Bluetooth not supported");
             finish();
         }else{
-            Log.i(TAG, "Bluetooth supported");
+            LogUtils.i( "Bluetooth supported");
         }
         BluetoothLeAdvertiser mBluetoothLeAdvertiser = mBluetoothAdapter.getBluetoothLeAdvertiser();
         if(mBluetoothLeAdvertiser == null){
             Toast.makeText(this, "the device not support peripheral", Toast.LENGTH_SHORT).show();
-            Log.e(TAG, "the device not support peripheral");
+            LogUtils.e( "the device not support peripheral");
 //          finish();
         } else{
-            Log.i(TAG, "the device support peripheral");
+            LogUtils.i( "the device support peripheral");
         }
     }
     @Override
@@ -230,14 +234,14 @@ public class MainActivity extends AppCompatActivity {
         connection = new ServiceConnection() {
             @Override
             public void onServiceConnected(ComponentName name, IBinder service) {
-                Log.i(TAG,"onBindService");
+                LogUtils.i("onBindService");
                 bleService = ((BleService.MyBinder)service).getService();
                 bleService.setOnBleCommProgressListener(onServiceProgressListener);
             }
 
             @Override
             public void onServiceDisconnected(ComponentName name) {
-                Log.e(TAG,"service disconnected.");
+                LogUtils.e("service disconnected.");
             }
 
         };
@@ -262,6 +266,28 @@ public class MainActivity extends AppCompatActivity {
 //        adv_btn.setEnabled(true);
         set_btn.setEnabled(true);
 
+        LogUtils.getLogConfig()
+                .configAllowLog(true)  // 是否在Logcat显示日志
+//                .configTagPrefix("LogUtilsDemo") // 配置统一的TAG 前缀
+//                .configFormatTag("%d{HH:mm:ss:SSS} %t %c{-5}") // 首行显示信息(可配置日期，线程等等)
+                .configShowBorders(false) // 是否显示边框
+                .configLevel(LogLevel.TYPE_VERBOSE); // 配置可展示日志等级
+
+        // 支持输入日志到文件
+        String filePath = getExternalFilesDir(null) + "/LogUtils/logs/";
+        LogUtils.getLog2FileConfig()
+                .configLog2FileEnable(true)  // 是否输出日志到文件
+                .configLogFileEngine(new LogFileEngineFactory(this)) // 日志文件引擎实现
+                .configLog2FilePath(filePath)  // 日志路径
+                .configLog2FileNameFormat("app-%d{yyyyMMddhhmm}.txt") // 日志文件名称
+                .configLog2FileLevel(LogLevel.TYPE_VERBOSE) // 文件日志等级
+                .configLogFileFilter(new LogFileFilter() {  // 文件日志过滤
+                    @Override
+                    public boolean accept(int level, String tag, String logContent) {
+                        return true;
+                    }
+                });
+
     }
 
     public void onStartConn(View view){
@@ -285,7 +311,7 @@ public class MainActivity extends AppCompatActivity {
     public void onNameSet(View view){
         bleCommMethod.bleClose();
         String s = name_edit.getText().toString();
-        Log.d(TAG, "name = " + s);
+        LogUtils.d( "name = " + s);
         if(s.length() == 0){
             Toast.makeText(this,"先设置设备名称",Toast.LENGTH_SHORT).show();
             return;
@@ -312,7 +338,7 @@ public class MainActivity extends AppCompatActivity {
             if(name.length() == 0){
                 name = "bt uart";
             }
-            Log.d(TAG, "name = " + name);
+            LogUtils.d( "name = " + name);
             bleCommMethod.bleRestart(name);
             is_adverting = false;
             ui_model = UI_MODEL_ADV_STOP;
@@ -327,7 +353,7 @@ public class MainActivity extends AppCompatActivity {
 
     public void OnSendDat(View view){
         byte ble_oper = bleCommMethod.bleGetOperator();
-        Log.i(TAG, "bleGetOperator :" + ble_oper);
+        LogUtils.i( "bleGetOperator :" + ble_oper);
         if(ble_oper == BleCommStatus.OPER_TRAN){
             String s = tx_edit.getText().toString().trim();
             if(s.length()>=16){
@@ -342,11 +368,51 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    private  Timer mWaittoFinsh = null;
+
+    private void startWaittoCloseTimer() {
+        LogUtils.i("startWaittoFinshTimer");
+        if(mWaittoFinsh == null){
+            mWaittoFinsh = new Timer();
+            mWaittoFinsh.schedule(new TimerTask() {
+                @Override
+                public void run() {
+
+                    if(!is_connect){
+                        LogUtils.i("now disconnect");
+                        mWaittoFinsh.cancel();
+                        mWaittoFinsh = null;
+//                        finish();
+                    }
+                }
+            }, 0,50/* 表示1000毫秒之後，執行一次 */);
+        }
+
+    }
+
+    @Override
+    public void onBackPressed(){
+        LogUtils.i( "onBackPressed :");
+        if(is_connect){
+            LogUtils.i( "need to wait ble disconnect :");
+            bleCommMethod.bleDisConnect();
+            startWaittoCloseTimer();
+            Toast.makeText(MainActivity.this,
+                    "正在断开设备" + deviceConAddr + "请稍后重试",Toast.LENGTH_SHORT).show();
+        }else{
+
+            super.onBackPressed();
+        }
+
+    }
+
     @Override
     protected void onDestroy() {
-        super.onDestroy();
+        LogUtils.i( "onDestroy :");
+        bleCommMethod.bleClose();
         unbindService(connection);
         connection = null;
+        super.onDestroy();
     }
 
     public static String bytesToHexString(byte[] src) {
@@ -368,7 +434,7 @@ public class MainActivity extends AppCompatActivity {
     OnBleCommProgressListener onServiceProgressListener = new OnBleCommProgressListener() {
         @Override
         public void onScanDevice(String device_addr, String device_name, byte adv_flag) {
-            Log.d(TAG, "onScanDevice " + device_addr + ' ' + device_name);
+            LogUtils.d( "onScanDevice " + device_addr + ' ' + device_name);
             if(!is_connect){
                 cancelAdvinfoTimer();
                 deviceAddr = device_addr;
@@ -384,14 +450,14 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onConnection(String device_addr,int errorCode) {
             if(errorCode == BleCommStatus.BLE_ERROR_OK){
-                Log.i(TAG, "onConnection ok");
+                LogUtils.i( "onConnection ok");
                 ui_model = UI_MODEL_CONNED_DEVICE;
                 deviceAddr = device_addr;
                 deviceConAddr = device_addr;
                 handler.post(mUpdateUI);
             } else {
                 is_connect = false;
-                Log.w(TAG, "onConnection error:" + errorCode);
+                LogUtils.e( "onConnection error:" + errorCode);
                 switch (errorCode){
                     case BleCommStatus.BLE_ERROR_CONNECTION_TIMEOUT:
                         deviceConAddr = device_addr;
@@ -426,7 +492,7 @@ public class MainActivity extends AppCompatActivity {
                 System.arraycopy(dat, 0, b, 0, len);
                 rx_string += bytesToHexString(b);
                 rx_string += "\n";
-                Log.i(TAG, "onReceive rx string = " + rx_string);
+                LogUtils.i( "onReceive rx string = " + rx_string);
                 rx_index++;
                 ui_model = UI_MODEL_RECIVE_DAT;
                 handler.post(mUpdateUI);
@@ -436,7 +502,7 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void onSendSta(int code) {
-            Log.i(TAG, "onSendSta index= " + code);
+            LogUtils.i( "onSendSta index= " + code);
             ui_model = UI_MODEL_SEND_OK;
             handler.post(mUpdateUI);
         }
@@ -448,7 +514,7 @@ public class MainActivity extends AppCompatActivity {
             if(name.length() == 0){
                 name = "bt uart";
             }
-            Log.i(TAG, "onServiceOpen name = " + name);
+            LogUtils.i( "onServiceOpen name = " + name);
             bleCommMethod.bleOpen(name);
         }
 
@@ -457,77 +523,77 @@ public class MainActivity extends AppCompatActivity {
 
             switch (oper){
                 case BleCommStatus.OPER_ADV:
-                    Log.i(TAG,"onStartSuccess bleStartAdvertisementSimulate success");
+                    LogUtils.d("onStartSuccess bleStartAdvertisementSimulate success");
                     break;
                 case BleCommStatus.OPER_CON_REQ:
-                    Log.i(TAG,"onStartSuccess bleStartConnect success");
+                    LogUtils.d("onStartSuccess bleStartConnect success");
                     break;
                 case BleCommStatus.OPER_DISCON_REQ:
-                    Log.i(TAG,"onStartSuccess bleDisConnect success");
+                    LogUtils.d("onStartSuccess bleDisConnect success");
                     break;
 
                 case BleCommStatus.OPER_TRAN:
-                    Log.i(TAG,"onStartSuccess send message requirement success");
+                    LogUtils.d("onStartSuccess send message requirement success");
                     break;
 
                 case BleCommStatus.OPER_OPEN:
-                    Log.i(TAG,"onStartSuccess ble communication session open success");
+                    LogUtils.d("onStartSuccess ble communication session open success");
                     break;
 
                 case BleCommStatus.OPER_CLOSE:
-                    Log.i(TAG,"onStartSuccess ble communication session close success");
+                    LogUtils.d("onStartSuccess ble communication session close success");
                     break;
 
                 default:
-                    Log.i(TAG, "onStartSuccess reserve operation  " + oper);
+                    LogUtils.d( "onStartSuccess reserve operation  " + oper);
                     break;
             }
         }
 
         @Override
         public void onStartFailure(byte oper, int errorCode){
-//            Log.d(TAG, "onStartFailure  " + oper + ' ' + errorCode);
+//            LogUtils.d( "onStartFailure  " + oper + ' ' + errorCode);
             switch (oper){
                 case BleCommStatus.OPER_ADV:
                     if(errorCode == BleCommStatus.BLE_ERROR_INVALID_PARAMETER){ // 1
-                        Log.w(TAG,"onStartFailure bleStartAdvertisementSimulate parameter fail");
+                        LogUtils.e("onStartFailure bleStartAdvertisementSimulate parameter fail");
                         strErrorMsg = "onStartFailure bleStartAdvertisementSimulate parameter fail";
                     }else if(errorCode == BleCommStatus.BLE_ERROR_INVALID_OPERATION){
-                        Log.w(TAG,"onStartFailure bleStartAdvertisementSimulate operation error");
+                        LogUtils.e("onStartFailure bleStartAdvertisementSimulate operation error");
                         strErrorMsg = "onStartFailure bleStartAdvertisementSimulate operation error";
                     }
                     break;
                 case BleCommStatus.OPER_CON_REQ:
                     if(errorCode == BleCommStatus.BLE_ERROR_INVALID_PARAMETER){ // 1
-                        Log.w(TAG,"onStartFailure bleStartConnect parameter incorrect");
+                        LogUtils.e("onStartFailure bleStartConnect parameter incorrect");
                         strErrorMsg = "onStartFailure bleStartConnect parameter incorrect";
                     } else if(errorCode == BleCommStatus.BLE_ERROR_INVALID_OPERATION){
-                        Log.w(TAG,"onStartFailure bleStartConnect operation error");
+                        LogUtils.e("onStartFailure bleStartConnect operation error");
                         strErrorMsg = "onStartFailure bleStartConnect operation error";
                     }
                     break;
                 case BleCommStatus.OPER_DISCON_REQ:
                     if(errorCode == BleCommStatus.BLE_ERROR_INVALID_PARAMETER){ // 1
-                        Log.w(TAG,"onStartFailure bleDisConnect parameter incorrect");
+                        LogUtils.e("onStartFailure bleDisConnect parameter incorrect");
                         strErrorMsg = "onStartFailure bleDisConnect parameter incorrect";
                     } else if(errorCode == BleCommStatus.BLE_ERROR_INVALID_OPERATION){
-                        Log.w(TAG,"onStartFailure bleDisConnect operation error");
+                        LogUtils.e("onStartFailure bleDisConnect operation error");
                         strErrorMsg = "onStartFailure bleDisConnect operation error";
                     }
                     break;
 
                 case BleCommStatus.OPER_TRAN:
                     if(errorCode == BleCommStatus.BLE_ERROR_INVALID_PARAMETER){ // 1
-                        Log.w(TAG,"onStartFailure bleSendMessage parameter incorrect");
+                        LogUtils.e("onStartFailure bleSendMessage parameter incorrect");
                         strErrorMsg = "onStartFailure bleSendMessage parameter incorrect";
                     } else if(errorCode == BleCommStatus.BLE_ERROR_INVALID_OPERATION){
-                        Log.w(TAG,"onStartFailure ble connection interval operation error");
+                        LogUtils.e("onStartFailure ble connection interval operation error");
                         strErrorMsg = "onStartFailure ble connection interval operation error";
                     }
                     break;
 
                 default:
-                    Log.w(TAG, "onStartFailure reserve operation  " + oper + ' ' + errorCode);
+                    LogUtils.e( "onStartFailure reserve operation  " + oper + ' ' + errorCode);
                     strErrorMsg = "onStartFailure reserve operation  " + oper + ' ' + errorCode;
                     break;
             }
