@@ -13,18 +13,30 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
+import android.os.Message;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -38,7 +50,7 @@ import com.wearlink.blecomm.BleService;
 import com.wearlink.blecomm.OnBleCommProgressListener;
 
 public class MainActivity extends AppCompatActivity {
-    private static final String TAG = "MainActivity";
+    private static final String TAG = "BleComm";
     private static final int REQUEST_CODE_ACCESS_COARSE_LOCATION = 2;
     private BleService bleService=null;
 
@@ -51,7 +63,7 @@ public class MainActivity extends AppCompatActivity {
 //    Button adv_btn;
     Button set_btn;
     TextView con_addr;
-    TextView con_name;
+    private List<String> Spinnerlist = new ArrayList<String>();
 
 //    byte[] conn_pass= new byte[]{1,2,3,4,5,6};
     byte[] conn_pass= new byte[]{1,2,3,4,5,6};
@@ -86,24 +98,97 @@ public class MainActivity extends AppCompatActivity {
     private static final int UI_MODEL_NAME_SET = 8;
     private static final int UI_MODEL_START_FAILURE = 9;
     private static final int UI_MODEL_SEND_OK = 10;
+    private static final int UI_MODEL_SPINNER_SELECT = 10;
 
+    private CheckBox checkbox_hex;
 
     private Timer mClearAbvInfoTimer = null;
 
     private BleCommMethod bleCommMethod;
 
-    private void startAdvinfoTimer() {
+    private class ScanDevice{
+        private String mac_address;
+        private int time;
+        private byte adv_flag;
+
+        ScanDevice(String mac, byte flag){
+            this.mac_address = mac;
+            this.adv_flag = flag;
+            this.time = 0;
+        }
+
+        public String getMac(){
+            return this.mac_address;
+        }
+//
+//        public void setAdvFlag(byte flag){
+//            this.adv_flag = flag;
+//        }
+
+        public byte getAdvFlag(){
+            return this.adv_flag;
+        }
+
+        public void setTimer(int t){
+            this.time = t;
+        }
+
+        public int getTime(){
+            return this.time;
+        }
+
+    }
+
+    ArrayList<ScanDevice> ScanDeviceList = new ArrayList<ScanDevice>();
+
+    boolean addMac(String mac, byte flag){
+        ScanDevice _scan_device = new ScanDevice(mac,flag);
+
+        if(mClearAbvInfoTimer == null){
+            startAdvinfoTimer(8000);
+        }
+
+        for(ScanDevice scan_device : ScanDeviceList){
+            if(scan_device.getMac().equals(mac)){
+                scan_device.setTimer(0);
+                return false;
+            }
+        }
+        Spinnerlist.add(mac);
+        ScanDeviceList.add(_scan_device);
+        return true;
+    }
+
+    int removeMac(int interval){
+        for(ScanDevice _scan_device:ScanDeviceList){
+            if(_scan_device.getTime() > 10*1000){
+                Spinnerlist.remove(_scan_device.getMac());
+                ScanDeviceList.remove(_scan_device);
+
+                break;
+            }else{
+                _scan_device.setTimer(_scan_device.getTime() + interval);
+            }
+        }
+
+        return ScanDeviceList.size();
+    }
+
+    private void startAdvinfoTimer(final int con_time_out) {
         mClearAbvInfoTimer = new Timer();
         mClearAbvInfoTimer.schedule(new TimerTask() {
             @Override
             public void run() {
-                deviceAddr = "";
-                deviceName = "";
-                deviceAdvFlag = 0;
-                ui_model = UI_MODEL_SCAN_DEVICE_TIMEOUT;
-                handler.post(mUpdateUI);
+//                deviceAddr = "";
+//                deviceName = "";
+//                deviceAdvFlag = 0;
+//                ui_model = UI_MODEL_SCAN_DEVICE_TIMEOUT;
+//                handler.post(mUpdateUI);
+                if(removeMac(con_time_out) == 0){
+
+                }
             }
-        }, 8000/* 表示1000毫秒之後，執行一次 */);
+        }, con_time_out,con_time_out/* 表示1000毫秒之後，執行一次 */);
     }
 
     private void cancelAdvinfoTimer() {
@@ -114,7 +199,57 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    final Handler handler = new Handler();
+
+    final Handler handler = new Handler(new Handler.Callback() {
+        @Override
+        public boolean handleMessage(Message msg) {
+            // todo
+            String strText;
+            switch (msg.what){
+                case UI_MODEL_SPINNER_SELECT:
+                    String url = (String) msg.obj;
+                    String[] str_array = url.split(",");
+
+                    String s = "已选择 MAC:" + str_array[1];
+                    con_addr.setText(s);
+
+                    Toast.makeText(MainActivity.this,
+                            str_array[0] + ":" + str_array[1],Toast.LENGTH_SHORT).show();
+                    break;
+
+                case UI_MODEL_SCAN_DEVICE:
+                    strText = "扫描成功";
+                    con_addr.setText(strText);
+                    break;
+
+                case UI_MODEL_CONNED_DEVICE:
+
+                    strText = "已连接  MAC :"+deviceAddr;
+                    con_addr.setText(strText);
+//                    strText = "连接NAME :"+deviceName;
+//                    con_name.setText(strText);
+                    Toast.makeText(MainActivity.this,deviceConAddr + "连接成功",Toast.LENGTH_SHORT).show();
+
+                    break;
+                case  UI_MODEL_CON_DEVICE_TIMEOUT:
+//                con_btn.setEnabled(false);
+//                discon_btn.setEnabled(false);
+                    LogUtils.d( "UI_MODEL_CON_DEVICE_TIMEOUT");
+                    strText = "连接超时 MAC: " + deviceConAddr;
+                    con_addr.setText(strText);
+//                    con_name.setText("");
+//                  Looper.prepare();//给当前线程初始化Looper
+                    Toast.makeText(MainActivity.this,deviceConAddr + "连接超时",Toast.LENGTH_SHORT).show();
+                    break;
+
+                case UI_MODEL_DISCON:
+                    break;
+
+            }
+            return true;
+        }
+    });
+
     final Runnable mUpdateUI = new Runnable() {
         @Override
         public void run() {
@@ -122,7 +257,7 @@ public class MainActivity extends AppCompatActivity {
 //               con_btn.setEnabled(false);
 //               discon_btn.setEnabled(false);
                 con_addr.setText("");
-                con_name.setText("");
+//                con_name.setText("");
                 rx_txt.setText("");
                if(intdeviceErrCode == BleCommStatus.BLE_ERROR_OK){
                    Toast.makeText(
@@ -136,29 +271,32 @@ public class MainActivity extends AppCompatActivity {
                            Toast.LENGTH_SHORT).show();
                }
                deviceConAddr = null;
-            }else if(ui_model == UI_MODEL_SCAN_DEVICE){
-//                con_btn.setEnabled(true);
-//                discon_btn.setEnabled(false);
-                String strText;
-                strText = "扫描MAC :"+deviceAddr;
-                con_addr.setText(strText);
-                strText = "扫描NAME :"+deviceName;
-                con_name.setText(strText);
-
-            }else if(ui_model == UI_MODEL_CONNED_DEVICE){
-                String strText;
-                strText = "连接MAC :"+deviceAddr;
-                con_addr.setText(strText);
-                strText = "连接NAME :"+deviceName;
-                con_name.setText(strText);
-                Toast.makeText(MainActivity.this,deviceConAddr + "连接成功",Toast.LENGTH_SHORT).show();
-//                con_btn.setEnabled(false);
-//                discon_btn.setEnabled(true);
-            }else if(ui_model == UI_MODEL_RECIVE_DAT){
+            }
+//            else if(ui_model == UI_MODEL_SCAN_DEVICE){
+////                con_btn.setEnabled(true);
+////                discon_btn.setEnabled(false);
+//                String strText;
+//                strText = "扫描MAC :"+deviceAddr;
+//                con_addr.setText(strText);
+//                strText = "扫描NAME :"+deviceName;
+//                con_name.setText(strText);
+//
+//            }
+//            else if(ui_model == UI_MODEL_CONNED_DEVICE){
+//                String strText;
+//                strText = "连接MAC :"+deviceAddr;
+//                con_addr.setText(strText);
+//                strText = "连接NAME :"+deviceName;
+//                con_name.setText(strText);
+//                Toast.makeText(MainActivity.this,deviceConAddr + "连接成功",Toast.LENGTH_SHORT).show();
+////                con_btn.setEnabled(false);
+////                discon_btn.setEnabled(true);
+//            }
+            else if(ui_model == UI_MODEL_RECIVE_DAT){
                 Toast.makeText(MainActivity.this, rx_string, Toast.LENGTH_SHORT).show();
                 rx_txt.append(rx_string);
                 int offset = rx_txt.getLineCount() * rx_txt.getLineHeight();
-                LogUtils.d( "offset:" + offset + "  rx_txt height:" + rx_txt.getHeight());
+                LogUtils.i( "offset:" + offset + "  rx_txt height:" + rx_txt.getHeight());
                 if (offset > (rx_txt.getHeight() + 60)) {
                     rx_txt.scrollTo(0, offset - rx_txt.getHeight());
                 }
@@ -168,23 +306,26 @@ public class MainActivity extends AppCompatActivity {
             }else if(ui_model == UI_MODEL_ADV_STOP){
 //                adv_btn.setEnabled(true);
 //                adv_btn.setText("广播");
-            }else if(ui_model == UI_MODEL_SCAN_DEVICE_TIMEOUT){
-//                con_btn.setEnabled(false);
-//                discon_btn.setEnabled(false);
-                con_addr.setText("");
-                con_name.setText("");
-                Toast.makeText(MainActivity.this,"扫描超时",Toast.LENGTH_SHORT).show();
-                LogUtils.i( "UI_MODEL_SCAN_DEVICE_TIMEOUT");
-            }else if(ui_model == UI_MODEL_CON_DEVICE_TIMEOUT) {
-//                con_btn.setEnabled(false);
-//                discon_btn.setEnabled(false);
-                LogUtils.d( "UI_MODEL_CON_DEVICE_TIMEOUT");
-                con_addr.setText("");
-                con_name.setText("");
-//                Looper.prepare();//给当前线程初始化Looper
-                Toast.makeText(MainActivity.this,deviceConAddr + "连接超时",Toast.LENGTH_SHORT).show();
-//                Looper.loop();
-            }else if(ui_model == UI_MODEL_NAME_SET) {
+            }
+//            else if(ui_model == UI_MODEL_SCAN_DEVICE_TIMEOUT){
+////                con_btn.setEnabled(false);
+////                discon_btn.setEnabled(false);
+//                con_addr.setText("");
+//                con_name.setText("");
+//                Toast.makeText(MainActivity.this,"扫描超时",Toast.LENGTH_SHORT).show();
+//                LogUtils.i( "UI_MODEL_SCAN_DEVICE_TIMEOUT");
+//            }
+//            else if(ui_model == UI_MODEL_CON_DEVICE_TIMEOUT) {
+////                con_btn.setEnabled(false);
+////                discon_btn.setEnabled(false);
+//                LogUtils.d( "UI_MODEL_CON_DEVICE_TIMEOUT");
+//                con_addr.setText("");
+////                con_name.setText("");
+////                Looper.prepare();//给当前线程初始化Looper
+//                Toast.makeText(MainActivity.this,deviceConAddr + "连接超时",Toast.LENGTH_SHORT).show();
+////                Looper.loop();
+//            }
+            else if(ui_model == UI_MODEL_NAME_SET) {
 //                name_btn.setEnabled(false);
 //                adv_btn.setEnabled(true);
 //                adv_btn.setText("广播");
@@ -222,6 +363,9 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT); // 禁用横屏
         setContentView(R.layout.activity_main);
+
+        checkbox_hex=(CheckBox) findViewById(R.id.checkBox_hex);
+
         if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M){
             if(ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED){
                 first = true;
@@ -252,8 +396,57 @@ public class MainActivity extends AppCompatActivity {
         }
         tx_edit = findViewById(R.id.tx_txt);
         rx_txt = findViewById(R.id.rx_txt);
+        rx_txt.setMovementMethod(ScrollingMovementMethod.getInstance());
         con_addr = findViewById(R.id.conn_addr);
-        con_name = findViewById(R.id.con_name);
+//        con_name = findViewById(R.id.con_name);
+        //    TextView con_name;
+        Spinner spinnerAddr = findViewById(R.id.spinner_addr);
+
+        Spinnerlist.add("Scan Device");
+//        Spinnerlist.add("2");
+//        Spinnerlist.add("3");
+        ArrayAdapter spinnerAdapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, Spinnerlist);
+
+        spinnerAddr.setAdapter(spinnerAdapter);
+//        spinnerAddr.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+
+        spinnerAddr.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int pos, long id) {
+                LogUtils.i("onItemSelected position=" + pos);
+
+                if(pos != 0 ){
+                    Message msg = Message.obtain(); // 实例化消息对象
+                    msg.what = UI_MODEL_SPINNER_SELECT; // 消息标识
+
+                    StringBuilder url= new StringBuilder();
+
+                    url.append("您选择的MAC地址是");
+                    url.append(",");
+                    url.append(Spinnerlist.get(pos));
+                    msg.obj = url.toString(); // 消息内容存放
+
+                    handler.sendMessage(msg);
+
+                    for(ScanDevice _scan_device:ScanDeviceList){
+                        if(_scan_device.getMac().equals(Spinnerlist.get(pos))){
+                            deviceAddr = _scan_device.getMac();
+                            deviceAdvFlag = _scan_device.getAdvFlag();
+                            LogUtils.i("Spinner select deviceAddr=%s deviceAdvFlag=%d",
+                                    deviceAddr, deviceAdvFlag);
+                        }
+                    }
+                }
+
+
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+
+            }
+        });
+
         con_btn = findViewById(R.id.con_btn);
 //        con_test_btn = findViewById(R.id.con_test_btn);
         discon_btn = findViewById(R.id.discon_btn);
@@ -268,7 +461,7 @@ public class MainActivity extends AppCompatActivity {
 
         LogUtils.getLogConfig()
                 .configAllowLog(true)  // 是否在Logcat显示日志
-//                .configTagPrefix("LogUtilsDemo") // 配置统一的TAG 前缀
+                .configTagPrefix(TAG) // 配置统一的TAG 前缀
 //                .configFormatTag("%d{HH:mm:ss:SSS} %t %c{-5}") // 首行显示信息(可配置日期，线程等等)
                 .configShowBorders(false) // 是否显示边框
                 .configLevel(LogLevel.TYPE_VERBOSE); // 配置可展示日志等级
@@ -288,12 +481,41 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
 
+
+        LogUtils.v("More convenient and easy to use android Log manager");
+
+        LogUtils.d("More convenient and easy to use android Log manager %d",
+                LogLevel.TYPE_DEBUG);
+        LogUtils.i("More convenient and easy to use android Log manager %d",
+                LogLevel.TYPE_INFO);
+        LogUtils.w("More convenient and easy to use android Log manager %d",
+                LogLevel.TYPE_WARM);
+        LogUtils.e("More convenient and easy to use android Log manager %s",
+                "dfs");
+
+
+    }
+
+    private static BluetoothAdapter mBluetoothAdapter;
+
+    public void CheckEnableBluetoothAdapt(){
+//        if(mBluetoothAdapter == null){
+            mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+
+            if(!mBluetoothAdapter.isEnabled()){
+                LogUtils.i("mBluetoothAdapter enable");
+                mBluetoothAdapter.enable();
+                while(!mBluetoothAdapter.isEnabled());
+            }else{
+                LogUtils.i("mBluetoothAdapter is enabled");
+            }
+//        }
     }
 
     public void onStartConn(View view){
         if(deviceAdvFlag == (BleCommStatus.ADV_LE_FLAG | BleCommStatus.ADV_BR_EDR_FLAG)) {
             bleCommMethod.bleStartConnect(deviceAddr,conn_pass,10000); /* 5000毫秒之後,连接超时*/
-            cancelAdvinfoTimer();
+//            cancelAdvinfoTimer();
             is_connect = true;
         } else {
             if ((deviceAdvFlag & BleCommStatus.ADV_BR_EDR_FLAG) == 0) {
@@ -318,6 +540,7 @@ public class MainActivity extends AppCompatActivity {
         }
         deviceSetName = s;
 //        bleCommMethod.bleStopAdvertisement();
+        CheckEnableBluetoothAdapt();
         bleCommMethod.bleRestart(deviceSetName);
         ui_model = UI_MODEL_NAME_SET;
         handler.post(mUpdateUI);
@@ -339,6 +562,7 @@ public class MainActivity extends AppCompatActivity {
                 name = "bt uart";
             }
             LogUtils.d( "name = " + name);
+            CheckEnableBluetoothAdapt();
             bleCommMethod.bleRestart(name);
             is_adverting = false;
             ui_model = UI_MODEL_ADV_STOP;
@@ -346,25 +570,89 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    public static byte[] hexStringToByteArray(String s) {
+        int len = s.length();
+        byte[] data = new byte[len/2];
+
+        for(int i = 0; i < len; i+=2){
+            data[i/2] = (byte) ((Character.digit(s.charAt(i), 16) << 4) + Character.digit(s.charAt(i+1), 16));
+        }
+
+        return data;
+    }
+
+    byte test_send = 0;
+    public void onSendDirect(View view){
+        try{
+            LogUtils.i( "onSendDirect :");
+            if(!deviceAddr.equals("")){
+                byte [] data;
+//            byte [] data = { test_send,test_send,test_send,test_send,test_send};
+                String s = tx_edit.getText().toString().trim();
+//            LogUtils.i( "hexStringToByteArray=" +  hexStringToByteArray(s));
+                if (checkbox_hex.isChecked()){
+                    data = hexStringToByteArray(s);
+                    for (byte b: data){
+                        LogUtils.i(String.format("0x%2x", b));
+                    }
+                }else{
+                    data = s.getBytes();
+                }
+
+                if(data.length > 10){
+                    Toast.makeText(this,"数据太长!",Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+
+                bleCommMethod.bleScanResponse(deviceAddr, data);
+                test_send += 1;
+
+            }
+        }catch (Exception e) {
+            e.printStackTrace();
+            Toast.makeText(this,"数据格式错误",Toast.LENGTH_SHORT).show();
+        }
+
+    }
 
     public void onDisConn(View view){
         bleCommMethod.bleDisConnect();
     }
 
     public void OnSendDat(View view){
-        byte ble_oper = bleCommMethod.bleGetOperator();
-        LogUtils.i( "bleGetOperator :" + ble_oper);
-        if(ble_oper == BleCommStatus.OPER_TRAN){
-            String s = tx_edit.getText().toString().trim();
-            if(s.length()>=16){
-                Toast.makeText(this,"数据太长!",Toast.LENGTH_SHORT).show();
-                return;
+
+        try{
+            byte ble_oper = bleCommMethod.bleGetOperator();
+            LogUtils.i( "bleGetOperator :" + ble_oper);
+            if(ble_oper == BleCommStatus.OPER_TRAN){
+                byte [] data;
+                String s = tx_edit.getText().toString().trim();
+                if (checkbox_hex.isChecked()){
+                    LogUtils.i("send data=0x%s",s);
+                    data = hexStringToByteArray(s);
+//                    for (byte b: data){
+//                        LogUtils.i(String.format("0x%2x", b));
+//                    }
+                }else{
+                    data = s.getBytes();
+                }
+
+                if(data.length > 16){
+                    Toast.makeText(this,"数据太长!",Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                bleCommMethod.bleSendMessage(data,(byte)data.length);
+
+            }else{
+                Toast.makeText(this,"连接未建立",Toast.LENGTH_SHORT).show();
             }
-            byte[] b = s.getBytes();
-            bleCommMethod.bleSendMessage(b,(byte)b.length);
-        }else{
-            Toast.makeText(this,"连接未建立",Toast.LENGTH_SHORT).show();
+        }catch (Exception e) {
+            e.printStackTrace();
+            Toast.makeText(this,"数据格式错误",Toast.LENGTH_SHORT).show();
         }
+
 
     }
 
@@ -436,13 +724,25 @@ public class MainActivity extends AppCompatActivity {
         public void onScanDevice(String device_addr, String device_name, byte adv_flag) {
             LogUtils.d( "onScanDevice " + device_addr + ' ' + device_name);
             if(!is_connect){
-                cancelAdvinfoTimer();
-                deviceAddr = device_addr;
-                deviceName = device_name;
-                deviceAdvFlag = adv_flag;
-                ui_model = UI_MODEL_SCAN_DEVICE;
-                handler.post(mUpdateUI);
-                startAdvinfoTimer();
+//                cancelAdvinfoTimer();
+//                deviceAddr = device_addr;
+//                deviceName = device_name;
+//                deviceAdvFlag = adv_flag;
+//                ui_model = UI_MODEL_SCAN_DEVICE;
+//                handler.post(mUpdateUI);
+//                startAdvinfoTimer();
+                if(addMac(device_addr, adv_flag)){
+                    LogUtils.i("new device find device_addr=%s" , device_addr);
+//                    Spinnerlist.add(device_addr);
+                    deviceAddr = device_addr;
+                    deviceName = device_name;
+                    deviceAdvFlag = adv_flag;
+                    handler.sendEmptyMessage(UI_MODEL_SCAN_DEVICE);
+                }
+
+
+
+
             }
 
         }
@@ -451,10 +751,11 @@ public class MainActivity extends AppCompatActivity {
         public void onConnection(String device_addr,int errorCode) {
             if(errorCode == BleCommStatus.BLE_ERROR_OK){
                 LogUtils.i( "onConnection ok");
-                ui_model = UI_MODEL_CONNED_DEVICE;
+//                ui_model = UI_MODEL_CONNED_DEVICE;
                 deviceAddr = device_addr;
                 deviceConAddr = device_addr;
-                handler.post(mUpdateUI);
+//                handler.post(mUpdateUI);
+                handler.sendEmptyMessage(UI_MODEL_CONNED_DEVICE);
             } else {
                 is_connect = false;
                 LogUtils.e( "onConnection error:" + errorCode);
@@ -464,8 +765,9 @@ public class MainActivity extends AppCompatActivity {
                         deviceAddr = "";
                         deviceName = "";
                         deviceAdvFlag = 0;
-                        ui_model = UI_MODEL_CON_DEVICE_TIMEOUT;
-                        handler.post(mUpdateUI);
+//                        ui_model = UI_MODEL_CON_DEVICE_TIMEOUT;
+//                        handler.post(mUpdateUI);
+                        handler.sendEmptyMessage(UI_MODEL_CON_DEVICE_TIMEOUT);
                         break;
 
                     default:
@@ -494,8 +796,20 @@ public class MainActivity extends AppCompatActivity {
                 rx_string += "\n";
                 LogUtils.i( "onReceive rx string = " + rx_string);
                 rx_index++;
-                ui_model = UI_MODEL_RECIVE_DAT;
-                handler.post(mUpdateUI);
+//                ui_model = UI_MODEL_RECIVE_DAT;
+//                handler.post(mUpdateUI);
+                handler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(MainActivity.this, rx_string, Toast.LENGTH_SHORT).show();
+                        rx_txt.append(rx_string);
+                        int offset = rx_txt.getLineCount() * rx_txt.getLineHeight();
+                        LogUtils.i( "offset:" + offset + "  rx_txt height:" + rx_txt.getHeight());
+                        if (offset > (rx_txt.getHeight() + 60)) {
+                            rx_txt.scrollTo(0, offset - rx_txt.getHeight());
+                        }
+                    }
+                });
             }
 
         }
@@ -503,8 +817,17 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onSendSta(int code) {
             LogUtils.i( "onSendSta index= " + code);
-            ui_model = UI_MODEL_SEND_OK;
-            handler.post(mUpdateUI);
+//            ui_model = UI_MODEL_SEND_OK;
+//            handler.post(mUpdateUI);
+            handler.post(new Runnable() {
+                @Override
+                public void run() {
+                    Toast.makeText(MainActivity.this,"发送成功",Toast.LENGTH_SHORT).show();
+                    LogUtils.i( "发送成功");
+                }
+            });
+
+
         }
 
         @Override
@@ -515,6 +838,7 @@ public class MainActivity extends AppCompatActivity {
                 name = "bt uart";
             }
             LogUtils.i( "onServiceOpen name = " + name);
+            CheckEnableBluetoothAdapt();
             bleCommMethod.bleOpen(name);
         }
 
@@ -601,6 +925,10 @@ public class MainActivity extends AppCompatActivity {
             handler.post(mUpdateUI);
         }
 
+        @Override
+        public void onStateChange(int state){
+            LogUtils.i("onStateChange= %d", state);
+        }
     };
 
     @Override

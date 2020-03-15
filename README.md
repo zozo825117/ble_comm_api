@@ -248,4 +248,19 @@ public interface OnBleCommProgressListener {
     static final byte BLE_ERROR_CONNECTION_DISCONNECTED = 0x04;
 ```
 
-
+# 更新
+## V02
+1.  增加新的方法
+```
+    /**
+     * ble advertisement start by special device name
+     * only simulate method because ble communication session
+     * support device need equal  LE General Discoverable Mode and
+     * BR/EDR Not Supported.
+     * @param device_addr : scan device address
+     * @param response_data : response data
+     */
+    void bleScanResponse(String device_addr, byte[] response_data);
+```
+2. 加速收发流程
+> 会影响V01的模块，请更新模块固件
